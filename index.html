@@ -1,30 +1,25 @@
 <!DOCTYPE html>
-<html lang="de">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>4u – Response Layer</title>
-
-<style>
-body{background:#000;color:#0f0;font-family:monospace;padding:20px;}
-pre{background:#111;padding:20px;border:1px solid #333;}
-button{background:#111;color:#0f0;border:1px solid #333;padding:8px 16px;}
-</style>
+  <meta charset="UTF-8">
+  <title>3hoch3 – FIST Class Epoche</title>
+  <style>
+    body { background:#000; color:#0ff; font-family:monospace; }
+    .fist { padding:20px; border:1px solid #0ff; margin:20px; }
+  </style>
 </head>
-
 <body>
 
-<h1>4u – Response Layer</h1>
-
-<button onclick="show()">RESPO</button>
-
-<pre id="out">Bereit...</pre>
+<div class="fist">
+  <h1>FIST Class – Epoche Move PAAHH</h1>
+  <p>Station 3hoch3 aktiviert die Energie‑Epoche (27D).</p>
+  <p>Move: 3 → 3×3 → 3³ → 6 → 9 → 12 → 6E</p>
+  <p>PAAHH: Puls‑Aktiv‑Atem‑Holo‑Hub</p>
+</div>
 
 <script type="module">
-import { respo } from "./respo.js";
-
-function show(){
-  out.textContent = JSON.stringify(respo, null, 2);
-}
+  import { THREEHOCH3 } from "./3hoch3.js";
+  console.log("FIST Epoche gestartet:", THREEHOCH3);
 </script>
 
 </body>
