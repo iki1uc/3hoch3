@@ -94,3 +94,4 @@ json
 }
 📜 Lizenz
 MIT – frei verwendbar.
+MIT  free to use and modify. Author credit (© iki1uc wieimmer) must be retained per the license terms. See LICENSE.
