@@ -1,26 +1,381 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>3hoch3 – FIST Class Epoche</title>
-  <style>
-    body { background:#000; color:#0ff; font-family:monospace; }
-    .fist { padding:20px; border:1px solid #0ff; margin:20px; }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>3hoch3 Engine — ATOM · Respo Evaluator</title>
+<style>
+  :root{--bg:#000;--fg:#7ff;--accent:#6cf}
+  body{margin:0;background:#000;color:var(--fg);font-family:Consolas,monospace;padding:12px}
+  header{display:flex;gap:12px;align-items:center;margin-bottom:8px}
+  .card{background:#041;padding:12px;border-radius:8px;border:1px solid #063}
+  #controls{display:flex;gap:8px;align-items:center}
+  select,input,button,textarea{background:#001;color:var(--fg);border:1px solid #034;padding:6px;border-radius:6px}
+  #gridWrap{display:flex;gap:12px;margin-top:12px}
+  #grid{display:grid;gap:4px;align-self:flex-start}
+  .cell{width:56px;height:56px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer; user-select:none}
+  .cell.small{width:40px;height:40px;font-size:12px}
+  #detail{min-width:320px;max-width:420px}
+  .kpi{font-size:13px;color:#9f9;margin-top:8px}
+  #circleSVG{background:#000;border:1px solid #033;border-radius:8px}
+  footer{margin-top:14px;color:#6f6;font-size:13px}
+  .row{display:flex;gap:8px;align-items:center}
+  .muted{color:#5a7}
+</style>
 </head>
 <body>
 
-<div class="fist">
-  <h1>FIST Class – Epoche Move PAAHH</h1>
-  <p>Station 3hoch3 aktiviert die Energie‑Epoche (27D).</p>
-  <p>Move: 3 → 3×3 → 3³ → 6 → 9 → 12 → 6E</p>
-  <p>PAAHH: Puls‑Aktiv‑Atem‑Holo‑Hub</p>
+<header>
+  <h2 style="margin:0">3hoch3 Engine — Respo Priorisierung</h2>
+  <div style="margin-left:12px" class="muted">Nutze QI/IQQ & φ‑Multiskala</div>
+</header>
+
+<div class="card" id="controls">
+  <div>
+    Grid: 
+    <select id="levelSel">
+      <option value="1">3×3 (9)</option>
+      <option value="2">9×9 (81)</option>
+      <option value="3">27×27 (729)</option>
+    </select>
+  </div>
+
+  <div>
+    QI <input id="qi" type="range" min="0" max="1" step="0.01" value="0.65" style="width:120px"/>
+  </div>
+  <div>
+    IQQ <input id="iqq" type="range" min="0" max="1" step="0.01" value="0.35" style="width:120px"/>
+  </div>
+
+  <div>
+    <button id="genBtn">Erzeuge Grid</button>
+    <button id="autoFill">Auto‑Fill Respos</button>
+    <button id="scoreAll">Berechne Scores</button>
+    <button id="exportBtn">Export JSON</button>
+  </div>
 </div>
 
-<script type="module">
-  import { THREEHOCH3 } from "./3hoch3.js";
-  console.log("FIST Epoche gestartet:", THREEHOCH3);
-</script>
+<div id="gridWrap">
+  <div id="grid" class="card"></div>
 
+  <div id="detail" class="card">
+    <div><strong>Details / Controls</strong></div>
+    <div id="cellInfo" style="margin-top:8px">Wähle eine Zelle im Grid, um Details zu sehen.</div>
+
+    <div style="margin-top:10px">
+      <label>Top‑K (Sortiert nach Final‑Score)</label>
+      <div id="topList" style="max-height:260px;overflow:auto;padding-top:6px"></div>
+    </div>
+
+    <div class="kpi">
+      <div>Multiskala‑Aggregation (φ‑Gewichte) Vorschau:</div>
+      <div id="multiscaleInfo">—</div>
+    </div>
+
+    <svg id="circleSVG" width="320" height="320" viewBox="0 0 320 320" style="margin-top:10px">
+      <defs><style>.pt{font:11px monospace;fill:#9ff}</style></defs>
+      <rect width="100%" height="100%" fill="transparent"/>
+      <g id="plot" transform="translate(160,160)"></g>
+    </svg>
+  </div>
+</div>
+
+<footer>
+  Hinweis: arg,xarg,arg3te nach deinem Schema; axis_score per Keyword‑Matching (9 Achsen). Dies ist eine interaktive Hilfs‑Engine — keine Daten werden veröffentlicht.
+</footer>
+
+<script>
+/* ==============================
+   Kernkonstanten & Hilfsfunktionen
+   ============================== */
+const PHI = (1 + Math.sqrt(5)) / 2;
+const AXES = [
+  {name:'conceptual', keywords:['axiom','theory','idea','concept','axiom']},
+  {name:'technical', keywords:['code','implementation','api','function','module']},
+  {name:'repro', keywords:['example','reproduce','dataset','script','seed','steps']},
+  {name:'usability', keywords:['guide','readme','usage','install','ui']},
+  {name:'privacy', keywords:['email','pii','personal','secret','key','password']},
+  {name:'performance', keywords:['perf','speed','optimize','latency','scale']},
+  {name:'tests', keywords:['test','unit','assert','expected','verify']},
+  {name:'ethics', keywords:['ethic','bias','impact','safety']},
+  {name:'integration', keywords:['integrate','plugin','adapter','interop']}
+];
+
+function clamp(v, a=0, b=1){ return Math.max(a, Math.min(b, v)); }
+function mean(arr){ return arr.length ? arr.reduce((s,x)=>s+x,0)/arr.length : 0; }
+function phiWeights(nMax){
+  const ws = Array.from({length:nMax+1}, (_,n)=>Math.pow(1/PHI,n));
+  const s = ws.reduce((a,b)=>a+b,0);
+  return ws.map(w=>w/s);
+}
+
+/* ==============================
+   Eval / Scoring (deine Formel)
+   ============================== */
+function evalRespo(confs, QI, IQQ){
+  const base = mean(confs);
+  const maxc = Math.max(...confs), minc = Math.min(...confs);
+  const variance = maxc - minc;
+  const combined = clamp(QI*base + (1 - IQQ)*maxc, 0, 1);
+  const arg = combined;
+  const xarg = variance;
+  const arg3te = Number((combined * (1 - xarg)).toFixed(6));
+  return { base, maxc, minc, variance, arg, xarg, arg3te };
+}
+
+function axisCoverage(text){
+  const t = (text||'').toLowerCase();
+  let matched = 0;
+  for(const a of AXES){
+    for(const k of a.keywords){
+      if(t.includes(k)){ matched++; break; }
+    }
+  }
+  return matched / AXES.length;
+}
+
+function scoreRespo(respo, QI, IQQ){
+  const confs = respo.confs || [0.5,0.5,0.5];
+  const e = evalRespo(confs, QI, IQQ);
+  const axis = axisCoverage(respo.text || '');
+  const final = 0.6 * e.arg3te + 0.4 * axis;
+  return Object.assign({}, respo, e, { axis_score: axis, final_score: Number(final.toFixed(6)) });
+}
+
+/* ==============================
+   Grid / UI
+   ============================== */
+const gridEl = document.getElementById('grid');
+const cellInfo = document.getElementById('cellInfo');
+const topList = document.getElementById('topList');
+const multiscaleInfo = document.getElementById('multiscaleInfo');
+const plotG = document.getElementById('plot');
+
+let state = { level:1, size:9, items:[], QI:0.65, IQQ:0.35 };
+
+function gridSizeForLevel(level){
+  // level 1 -> 3x3 (9), level 2 -> 9x9 (81), level3 -> 27x27 (729)
+  const side = Math.pow(3, level);
+  return { side, count: side * side };
+}
+
+function generateEmptyItems(level){
+  const info = gridSizeForLevel(level);
+  const items = [];
+  for(let i=0;i<info.count;i++){
+    items.push({ id:i, text:'', confs:[0.5,0.5,0.5] });
+  }
+  return { items, side: info.side };
+}
+
+function buildGrid(level){
+  const { items, side } = generateEmptyItems(level);
+  state.level = level;
+  state.size = items.length;
+  state.items = items;
+  renderGrid(side);
+  updateTopList();
+  clearPlot();
+  multiscaleInfo.textContent = 'keine Multiskala berechnet';
+}
+
+function renderGrid(side){
+  gridEl.innerHTML = '';
+  gridEl.style.gridTemplateColumns = `repeat(${side}, ${Math.max(40, Math.floor(560/side))}px)`;
+  gridEl.style.width = `${Math.min(560, side * Math.max(40, Math.floor(560/side)) + (side-1)*4)}px`;
+  state.items.forEach((it, idx) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.textContent = (it.text && it.text.length) ? (it.text.slice(0,6)) : (idx+1);
+    cell.title = `Zelle ${idx+1}`;
+    cell.onclick = () => openEditor(idx);
+    gridEl.appendChild(cell);
+    it._el = cell;
+  });
+}
+
+function openEditor(idx){
+  const it = state.items[idx];
+  const html = `
+    <div><strong>Zelle ${idx+1}</strong></div>
+    <div style="margin-top:8px"><label>Text</label><br><textarea id="editText" style="width:100%;height:80px">${escapeHtml(it.text)}</textarea></div>
+    <div style="margin-top:8px"><label>Konfidenzen (c1,c2,c3)</label>
+      <div class="row" style="margin-top:6px">
+        <input id="c1" type="range" min="0" max="1" step="0.01" value="${it.confs[0]}" style="width:100px"/>
+        <span id="c1v">${it.confs[0]}</span>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <input id="c2" type="range" min="0" max="1" step="0.01" value="${it.confs[1]}" style="width:100px"/>
+        <span id="c2v">${it.confs[1]}</span>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <input id="c3" type="range" min="0" max="1" step="0.01" value="${it.confs[2]}" style="width:100px"/>
+        <span id="c3v">${it.confs[2]}</span>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <button id="saveCell">Speichern</button>
+      <button id="clearCell">Leeren</button>
+      <button id="scoreCell">Score</button>
+    </div>
+  `;
+  cellInfo.innerHTML = html;
+  $('#c1').addEventListener('input', ()=> $('#c1v').textContent = $('#c1').value);
+  $('#c2').addEventListener('input', ()=> $('#c2v').textContent = $('#c2').value);
+  $('#c3').addEventListener('input', ()=> $('#c3v').textContent = $('#c3').value);
+  document.getElementById('saveCell').onclick = ()=>{
+    it.text = $('#editText').value.trim();
+    it.confs = [Number($('#c1').value), Number($('#c2').value), Number($('#c3').value)];
+    it._el.textContent = it.text ? it.text.slice(0,6) : (idx+1);
+    cellInfo.innerHTML = 'Gespeichert.';
+  };
+  document.getElementById('clearCell').onclick = ()=>{
+    it.text = ''; it.confs = [0.5,0.5,0.5]; it._el.textContent = (idx+1); cellInfo.innerHTML = 'Gelöscht.';
+  };
+  document.getElementById('scoreCell').onclick = ()=>{
+    const scored = scoreRespo(it, state.QI, state.IQQ);
+    showScorePopup(scored);
+  };
+}
+
+function showScorePopup(s){
+  const html = `
+    <div><strong>Score Zelle ${s.id+1 || ''}</strong></div>
+    <pre style="background:#001;padding:8px;border-radius:6px">
+arg: ${s.arg}
+xarg: ${s.xarg}
+arg3te: ${s.arg3te}
+axis: ${Number(s.axis_score).toFixed(3)}
+final: ${s.final_score}
+  </pre>
+  `;
+  cellInfo.innerHTML = html;
+}
+
+function escapeHtml(s){ return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function $(id){ return document.getElementById(id); }
+
+/* ==============================
+   Batch scoring, Top list & plot
+   ============================== */
+function scoreAll(){
+  state.QI = Number($('#qi').value);
+  state.IQQ = Number($('#iqq').value);
+  const scored = state.items.map((it, idx) => {
+    const r = Object.assign({}, it);
+    r.id = idx;
+    return scoreRespo(r, state.QI, state.IQQ);
+  });
+  state.scored = scored;
+  renderTopList();
+  renderPlot(scored.slice(0, Math.min(200, scored.length))); // plot up to 200 for performance
+  computeMultiscale(scored);
+}
+
+function renderTopList(){
+  if(!state.scored) return;
+  const sorted = [...state.scored].sort((a,b)=>b.final_score - a.final_score);
+  topList.innerHTML = sorted.slice(0,30).map(s => {
+    return `<div style="padding:6px;border-bottom:1px solid #022">
+      <strong>#${s.id+1}</strong> final=${s.final_score.toFixed(3)} arg3te=${s.arg3te.toFixed(3)} axis=${s.axis_score.toFixed(2)}
+      <div style="font-size:12px;color:#9aa">${escapeHtml((s.text||'').slice(0,120))}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPlot(items){
+  plotG.innerHTML = '';
+  const maxR = 120;
+  items.forEach((it, idx)=>{
+    const angle = it.arg3te * Math.PI * 2;
+    const r = 20 + it.axis_score * maxR;
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', x);
+    circle.setAttribute('cy', y);
+    circle.setAttribute('r', 6);
+    circle.setAttribute('fill', it.final_score > 0.8 ? '#6f6' : it.final_score > 0.5 ? '#6cf' : '#444');
+    circle.setAttribute('stroke','#022');
+    circle.setAttribute('data-id', it.id);
+    circle.addEventListener('mouseenter', ()=> {
+      const txt = `#${it.id+1} final=${it.final_score.toFixed(3)} arg3te=${it.arg3te.toFixed(3)} axis=${it.axis_score.toFixed(2)}\n${it.text||''}`;
+      // simple tooltip
+      circle.setAttribute('r',9);
+      $('#cellInfo').textContent = txt;
+    });
+    circle.addEventListener('mouseleave', ()=> {
+      circle.setAttribute('r',6);
+      $('#cellInfo').textContent = 'Wähle eine Zelle im Grid, um Details zu sehen.';
+    });
+    plotG.appendChild(circle);
+  });
+}
+
+function clearPlot(){ plotG.innerHTML = ''; }
+
+/* ==============================
+   Multiskala Aggregation mit φ
+   ============================== */
+function computeMultiscale(scored){
+  // Suppose current items correspond to level L; compute per-level averages up to L
+  const L = state.level; // e.g., 1..3
+  // We'll simulate coarser levels by grouping: level 1 is current, level-1 grouping etc.
+  const levelScores = [];
+  for(let lvl = 1; lvl <= L; lvl++){
+    // grouping factor = 3^(L-lvl) : compress current items into lvl groups
+    const factor = Math.pow(3, state.level - lvl);
+    // compute average final per group then mean of groups
+    const groupMeans = {};
+    scored.forEach((s,i)=>{
+      const group = Math.floor(i / (factor*factor)); // crude grouping
+      groupMeans[group] = groupMeans[group] || [];
+      groupMeans[group].push(s.final_score);
+    });
+    const gm = Object.values(groupMeans).map(arr=>mean(arr));
+    levelScores.push(mean(gm));
+  }
+  const ws = phiWeights(levelScores.length - 1);
+  const agg = levelScores.reduce((sum, val, i) => sum + val * ws[i], 0);
+  multiscaleInfo.textContent = `Levels ${levelScores.map((v,i)=>`L${i+1}=${v.toFixed(3)}`).join(', ')}  → aggregated=${agg.toFixed(4)}`;
+  state.multiscale = { levelScores, weights: ws, aggregated: agg };
+}
+
+/* ==============================
+   Helpers: Auto‑Fill & Export
+   ============================== */
+function autoFillSample(){
+  state.items.forEach((it, idx)=>{
+    it.text = `Respo ${idx+1} sample text example ${idx%5===0 ? 'test' : ''} ${(idx%7===0)?'example':''}`;
+    it.confs = [Number((0.4 + Math.random()*0.6).toFixed(2)), Number((0.4 + Math.random()*0.6).toFixed(2)), Number((0.4 + Math.random()*0.6).toFixed(2))];
+    if(it._el) it._el.textContent = it.text.slice(0,6);
+  });
+  cellInfo.textContent = 'Auto‑Fill abgeschlossen.';
+}
+
+function exportJSON(){
+  const out = { meta:{level:state.level, size:state.size, QI:state.QI, IQQ:state.IQQ, timestamp:Date.now()}, items: state.items, scored: state.scored, multiscale: state.multiscale };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = '3hoch3_respos.json'; a.click(); URL.revokeObjectURL(url);
+}
+
+/* ==============================
+   Event bindings & init
+   ============================== */
+$('#genBtn').addEventListener('click', ()=> {
+  const lvl = Number($('#levelSel').value);
+  buildGrid(lvl);
+});
+$('#autoFill').addEventListener('click', ()=> autoFillSample());
+$('#scoreAll').addEventListener('click', ()=> scoreAll());
+$('#exportBtn').addEventListener('click', ()=> exportJSON());
+
+$('#qi').addEventListener('input', ()=> state.QI = Number($('#qi').value));
+$('#iqq').addEventListener('input', ()=> state.IQQ = Number($('#iqq').value));
+
+// init with default 3x3
+buildGrid(1);
+</script>
 </body>
 </html>
