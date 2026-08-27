@@ -1,25 +1,36 @@
-PREFETCH:
-  POS.MODE: ULTRA-U
-  POS.LAYER: 3 / 6 / 9
-  POS.RELATION: 3x3 → 6e6D → 9x9
+PREFETCH_3 = {
+  POS: {
+    MODE: "ULTRA-U",
+    LAYER: "1 / 2 / 3",
+    RELATION: "1x3 → 3e3D → 3x3"
+  },
 
-  ENGINE.MODE: ULTRA-KERNEL
-  ENGINE.CTRL: TRUE
-  ENGINE.BIND: 9x9 + 3x3 + 6e6D
+  ENGINE: {
+    MODE: "ULTRA-KERNEL",
+    CTRL: true,
+    BIND: "3x3 + 1x3 + 3e3D"
+  },
 
-  9x9.IN: horizontal
-  9x9.OUT: vertikal
-  9x9.BREITE: 9
-  9x9.TIEFE: 9
-  9x9.MYSTER: aktiv
+  "3x3": {
+    IN: "horizontal",
+    OUT: "vertikal",
+    BREITE: 3,
+    TIEFE: 3,
+    MYSTER: "aktiv",
 
-  3x3.AXIOM: DA / NE / BEN
-  3x3.ZOOM: 1 → 3 → 9
+    AXIOM: ["DA", "NE", "BEN"],
+    ZOOM: "1 → 3"
+  },
 
-  6e6D.ABLEITUNG: U
-  6e6D.KERNEL: Tiefen‑Kernel
-  6e6D.ZOOM: 6 → 12 → 18
+  "3e3D": {
+    ABLEITUNG: "U",
+    KERNEL: "Tiefen-Kernel",
+    ZOOM: "3 → 6 → 9"
+  },
 
-  SYNC.ALL: TRUE
-  SYNC.ULTRA: TRUE
-  SYNC.ENGINE: TRUE
+  SYNC: {
+    ALL: true,
+    ULTRA: true,
+    ENGINE: true
+  }
+};
