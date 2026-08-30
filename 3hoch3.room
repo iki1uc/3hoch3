@@ -7,5 +7,6 @@
     "tensor": "ULTRA-NC9×9.room",
     "nc": "81.room"
   },
-  "use": "6E-optimization"
+  "use": "6E-optimization",
+  "sync": true
 }
